@@ -5,7 +5,10 @@ type Provider = "openrouter" | "openai";
 function resolveProvider(): { provider: Provider; apiKey: string; baseUrl: string; model: string } | null {
   const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
   const openaiKey = process.env.OPENAI_API_KEY?.trim();
-  const provider = (process.env.AI_PROVIDER?.trim() as Provider | undefined) ?? (openrouterKey ? "openrouter" : openaiKey ? "openai" : undefined);
+  const provider =
+    (process.env.AI_PROVIDER?.trim() as Provider | undefined) ??
+    (openrouterKey ? "openrouter" : openaiKey ? "openai" : undefined);
+
   if (!provider) return null;
 
   if (provider === "openrouter") {
@@ -27,21 +30,32 @@ function resolveProvider(): { provider: Provider; apiKey: string; baseUrl: strin
   };
 }
 
-export async function generateAnswer(question: string, sources: SearchResult[]): Promise<{ answer: string; model: string; usedAi: boolean }> {
+export async function generateAnswer(
+  question: string,
+  sources: SearchResult[]
+): Promise<{ answer: string; model: string; usedAi: boolean }> {
   const config = resolveProvider();
   const context = sources.length
     ? sources
-        .map(
-          (item, index) =>
-            `Источник ${index + 1}: ${item.title}\nТема: ${item.topic}\nФрагмент: ${item.excerpt}\n`
+        .map((item, index) =>
+          [
+            `Источник ${index + 1}: ${item.title}`,
+            `Тема: ${item.topic}`,
+            `Канал/источник: ${item.source_channel ?? item.source}`,
+            item.posted_at ? `Дата: ${item.posted_at}` : null,
+            `Фрагмент: ${item.excerpt}`,
+          ]
+            .filter(Boolean)
+            .join("\n")
         )
-        .join("\n")
+        .join("\n\n")
     : "Подходящих источников в базе нет.";
 
   const system = [
     "Ты помощник по базе знаний владельцев Hyundai Palisade.",
     "Отвечай по-русски, коротко и по делу.",
-    "Опирайся только на переданный контекст.",
+    "Опирайся только на переданный контекст из базы.",
+    "Не выдумывай факты, цены, артикулы и регламенты, если их нет в источниках.",
     "Если данных не хватает, честно скажи, что в базе нет уверенного ответа.",
     "В конце добавь короткий блок 'Источники' с перечислением использованных источников.",
   ].join(" ");
@@ -51,7 +65,7 @@ export async function generateAnswer(question: string, sources: SearchResult[]):
       ? `По базе нашёлся полезный контекст:\n\n${sources
           .map((item, index) => `• ${index + 1}. ${item.title}: ${item.excerpt}`)
           .join("\n")}`
-      : "Пока в локальной базе нет подходящего ответа. Добавь больше материалов или переформулируй вопрос.";
+      : "Пока в базе нет подходящего ответа. Добавь материалы в Supabase или переформулируй вопрос.";
     return { answer: fallback, model: "local-fallback", usedAi: false };
   }
 
@@ -60,7 +74,12 @@ export async function generateAnswer(question: string, sources: SearchResult[]):
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${config.apiKey}`,
-      ...(config.provider === "openrouter" ? { "HTTP-Referer": process.env.APP_URL ?? "http://localhost:3000", "X-Title": "Palisade Owners AI" } : {}),
+      ...(config.provider === "openrouter"
+        ? {
+            "HTTP-Referer": process.env.APP_URL ?? "http://localhost:3000",
+            "X-Title": "Palisade Owners AI",
+          }
+        : {}),
     },
     body: JSON.stringify({
       model: config.model,
@@ -85,8 +104,7 @@ export async function generateAnswer(question: string, sources: SearchResult[]):
     choices?: { message?: { content?: string } }[];
   };
   const answer = json.choices?.[0]?.message?.content?.trim();
-  if (!answer) {
-    throw new Error("AI response is empty");
-  }
+  if (!answer) throw new Error("AI response is empty");
+
   return { answer, model: config.model, usedAi: true };
 }

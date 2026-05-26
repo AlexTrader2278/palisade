@@ -13,7 +13,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "question too short" }, { status: 400 });
     }
 
-    const sources = searchKnowledge(question.trim(), 5);
+    const sources = await searchKnowledge(question.trim(), 5);
     const result = await generateAnswer(question.trim(), sources);
     return NextResponse.json({
       question: question.trim(),
