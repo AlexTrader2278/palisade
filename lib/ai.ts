@@ -17,7 +17,7 @@ function resolveProvider(): { provider: Provider; apiKey: string; baseUrl: strin
       provider,
       apiKey: openrouterKey,
       baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
-      model: process.env.AI_MODEL?.trim() || "openai/gpt-4o-mini",
+      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-chat",
     };
   }
 
@@ -40,8 +40,11 @@ export async function summarize(
 ): Promise<{ answer: string; model: string; usedAi: boolean }> {
   const config = resolveProvider();
 
-  const context = threads.length
-    ? threads
+  // В LLM шлём только топ-10 тредов (контроль токенов под наплыв),
+  // даже если на странице показываем больше.
+  const top = threads.slice(0, 10);
+  const context = top.length
+    ? top
         .map((t, i) =>
           [
             `Обсуждение ${i + 1} (${fmtDate(t.start_date)}, сообщений: ${t.message_count}, реакций: ${t.reactions_total}):`,
@@ -53,10 +56,10 @@ export async function summarize(
 
   const system = [
     "Ты помощник по базе обсуждений владельцев Hyundai Palisade из Telegram-сообщества.",
-    "Тебе дают реальные треды обсуждений. Суммируй, что люди пишут по вопросу.",
-    "Отвечай по-русски, коротко и по делу.",
-    "Опирайся ТОЛЬКО на переданные обсуждения. Не выдумывай факты, цены, артикулы и регламенты.",
-    "Передавай разные мнения, если они есть. Если данных мало — честно скажи.",
+    "Тебе дают реальные треды обсуждений. Не пересказывай их по очереди — СИНТЕЗИРУЙ общий вывод.",
+    "Структура ответа: 1) короткий вывод в 1-2 предложениях; 2) ключевые моменты списком (что советуют, какие есть мнения, на что жалуются); 3) если мнения расходятся — покажи это.",
+    "Отвечай по-русски, по делу, без воды. Опирайся ТОЛЬКО на переданные обсуждения.",
+    "Не выдумывай факты, цены, артикулы и регламенты, которых нет в тредах. Если данных мало — честно скажи.",
   ].join(" ");
 
   if (!config) {

@@ -89,7 +89,7 @@ export default function Home() {
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q.trim(), limit: 20 }),
+        body: JSON.stringify({ query: q.trim(), limit: 25 }),
       });
       const json = (await res.json()) as SearchResponse;
       if (!res.ok) {
