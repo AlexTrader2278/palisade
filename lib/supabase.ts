@@ -27,10 +27,31 @@ export function hasSupabaseConfig(): boolean {
   return Boolean(supabaseConfig()) && Boolean(process.env.MISTRAL_API_KEY?.trim());
 }
 
-/** Гибридный поиск тредов: embed запроса (Mistral) + RPC search_threads (вектор + FTS, RRF). */
+async function rpc(
+  config: { url: string; key: string },
+  fn: string,
+  body: Record<string, unknown>
+): Promise<Thread[]> {
+  const res = await httpPost(
+    `${config.url}/rest/v1/rpc/${fn}`,
+    body,
+    { apikey: config.key, Authorization: `Bearer ${config.key}` },
+    30_000
+  );
+  if (res.status >= 400) {
+    throw new Error(`Supabase rpc ${fn} ${res.status}: ${res.body.slice(0, 300)}`);
+  }
+  return JSON.parse(res.body) as Thread[];
+}
+
+/**
+ * Поиск тредов. Сначала гибрид (вектор Mistral + FTS, RRF). Если эмбеддинг
+ * получить не удалось (например, Mistral 429 capacity) — мягкий откат на
+ * keyword-поиск (search_threads_fts), чтобы выдача не падала с ошибкой.
+ */
 export async function searchThreads(
   query: string,
-  matchCount = 20,
+  matchCount = 25,
   sourceChannel: string | null = null
 ): Promise<Thread[]> {
   const config = supabaseConfig();
@@ -38,25 +59,32 @@ export async function searchThreads(
   const mistralKey = process.env.MISTRAL_API_KEY?.trim();
   if (!mistralKey) throw new Error("MISTRAL_API_KEY обязателен для поиска");
 
-  const { embeddings } = await embed([query], mistralKey);
-  const queryEmbedding = embeddings[0];
-  if (!queryEmbedding) throw new Error("Не удалось получить embedding запроса");
-
-  const res = await httpPost(
-    `${config.url}/rest/v1/rpc/search_threads`,
-    {
-      // Postgres приводит строку "[...]" к halfvec(1024)
-      query_embedding: `[${queryEmbedding.join(",")}]`,
-      query_text: query,
-      match_count: matchCount,
-      p_source_channel: sourceChannel,
-    },
-    { apikey: config.key, Authorization: `Bearer ${config.key}` },
-    30_000
-  );
-
-  if (res.status >= 400) {
-    throw new Error(`Supabase rpc ${res.status}: ${res.body.slice(0, 300)}`);
+  let queryEmbedding: number[] | null = null;
+  try {
+    const { embeddings } = await embed([query], mistralKey);
+    queryEmbedding = embeddings[0] ?? null;
+  } catch (e) {
+    console.warn("[search] embed failed, fallback to FTS:", (e as Error).message);
   }
-  return JSON.parse(res.body) as Thread[];
+
+  if (queryEmbedding) {
+    try {
+      return await rpc(config, "search_threads", {
+        // Postgres приводит строку "[...]" к halfvec(1024)
+        query_embedding: `[${queryEmbedding.join(",")}]`,
+        query_text: query,
+        match_count: matchCount,
+        p_source_channel: sourceChannel,
+      });
+    } catch (e) {
+      console.warn("[search] hybrid rpc failed, fallback to FTS:", (e as Error).message);
+    }
+  }
+
+  // Резерв: чистый русский FTS, без эмбеддинга.
+  return rpc(config, "search_threads_fts", {
+    query_text: query,
+    match_count: matchCount,
+    p_source_channel: sourceChannel,
+  });
 }
