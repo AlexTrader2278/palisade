@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { getSupabaseAdmin } from "../lib/supabase";
+import { getSupabaseServiceRole } from "../lib/supabase";
 
 type TelegramMessage = {
   id?: number;
@@ -89,7 +89,7 @@ async function main() {
     })
     .filter((row): row is KnowledgeChunkInsert => row !== null);
 
-  const supabase = getSupabaseAdmin();
+  const supabase = getSupabaseServiceRole();
   const batchSize = 500;
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
