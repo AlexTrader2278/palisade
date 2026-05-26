@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { generateAnswer } from "@/lib/ai";
-import { searchKnowledge } from "@/lib/search";
+import { summarize } from "@/lib/ai";
+import { search } from "@/lib/search";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,8 +13,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "question too short" }, { status: 400 });
     }
 
-    const sources = await searchKnowledge(question.trim(), 5);
-    const result = await generateAnswer(question.trim(), sources);
+    const sources = await search(question.trim(), 8);
+    const result = await summarize(question.trim(), sources);
     return NextResponse.json({
       question: question.trim(),
       answer: result.answer,

@@ -1,73 +1,44 @@
-# Palisade Owners AI
+# Palisade Community Search
 
-Отдельный публичный MVP для владельцев Hyundai Palisade.
+Публичный поиск по обсуждениям Telegram-сообщества владельцев Hyundai Palisade.
 
 ## Что это
 
-- база знаний по типичным вопросам владельцев Palisade
-- поиск по Supabase-таблице с сообщениями/чанками
-- AI-ответ по найденному контексту
-- бесплатный демо-режим без Telegram, без VPN и без личной сервисной книжки
-
-## Что входит в MVP
-
-- быстрый поиск по Supabase RAG-таблице `knowledge_chunks`
-- карточки по темам: масло, тормоза, AWD/HTRAC, дизель, электроника, шины
-- AI-ответ поверх найденных источников
-- лимит демо-AI в браузере: 5 запросов в день
-
-## Как запустить
-
-```powershell
-npm install
-npm run dev
-```
-
-## Переменные окружения
-
-AI-ответы работают, только если задать один из ключей:
-
-```bash
-OPENROUTER_API_KEY=...
-OPENAI_API_KEY=...
-AI_PROVIDER=openrouter
-AI_MODEL=openai/gpt-4o-mini
-SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-```
-
-Если Supabase env ещё не задан, сайт работает в fallback-режиме по локальным демо-карточкам.
-
-## Supabase
-
-1. Создай Supabase project.
-2. Открой SQL Editor.
-3. Выполни `supabase/schema.sql`.
-4. Добавь `NEXT_PUBLIC_SUPABASE_URL` и `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` в `.env.local` и в Vercel env.
-5. Для импорта Telegram добавь локально `SUPABASE_SERVICE_ROLE_KEY`. Не публикуй его в клиенте.
-
-## Импорт Telegram-экспорта
-
-```powershell
-npm run import:telegram -- "C:\path\to\result.json" palisade-chat
-```
-
-Скрипт читает стандартный Telegram JSON export, фильтрует короткий мусор и складывает сообщения в `knowledge_chunks`.
+- одно поле → реальные треды обсуждений владельцев (дата, активность, реакции)
+- гибридный поиск: семантика (Mistral embeddings) + русский full-text, слияние RRF
+- по желанию — AI-сводка найденных тредов (кнопка, лимит в браузере)
+- без Telegram, без VPN, без личной сервисной книжки
 
 ## Архитектура
 
-- `app/page.tsx` - публичный интерфейс
-- `app/api/search` - поиск по базе знаний
-- `app/api/answer` - AI-ответ поверх найденных материалов
-- `supabase/schema.sql` - таблица и RPC для поиска
-- `scripts/import-telegram.ts` - импорт Telegram JSON
-- `lib/search.ts` - Supabase-поиск + локальный fallback
-- `lib/ai.ts` - OpenAI-compatible слой для OpenRouter или OpenAI
+- читает готовую базу тредов из Supabase-проекта `palisade-sergey` (≈65K тредов)
+- ходит только под **anon-ключом** и вызывает единственную RPC `search_threads`
+- прямого доступа к таблице у публичного сервиса нет (RLS + SECURITY DEFINER)
 
-## Дальше можно расширить
+## Файлы
 
-- pgvector embeddings
-- авторизация для редакторов
-- отдельные темы по мотору, АКПП и комплектациям
+- `app/page.tsx` — публичный UI поиска
+- `app/api/search` — поиск тредов (бесплатно)
+- `app/api/answer` — AI-сводка по найденным тредам
+- `lib/supabase.ts` — embed запроса + вызов RPC `search_threads`
+- `lib/mistral.ts`, `lib/http.ts` — embeddings и HTTP-обёртка
+- `supabase/migrations/0002_public_search_access.sql` — read-only доступ к базе
+
+## Запуск
+
+```powershell
+npm install
+# скопируй .env.example в .env.local и заполни ключи
+npm run dev
+```
+
+## Supabase
+
+Один раз выполни `supabase/migrations/0002_public_search_access.sql` в SQL Editor
+проекта `palisade-sergey`. Это включает RLS на `threads`, делает `search_threads`
+SECURITY DEFINER и выдаёт `anon` право вызывать только поиск.
+
+## Переменные окружения
+
+См. `.env.example`. Минимум для поиска: `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`MISTRAL_API_KEY`. Для AI-сводки добавь `OPENROUTER_API_KEY`.

@@ -2,20 +2,22 @@
 
 import { useMemo, useState } from "react";
 
-type SearchResult = {
+type ThreadResult = {
   id: string;
-  title: string;
-  topic: string;
-  tags: string[];
-  answer: string;
-  source: string;
-  score: number;
+  text: string;
   excerpt: string;
+  source_channel: string | null;
+  start_date: string;
+  end_date: string;
+  message_count: number;
+  participants_count: number;
+  reactions_total: number;
+  rrf_score: number;
 };
 
 type SearchResponse = {
   query: string;
-  results: SearchResult[];
+  results: ThreadResult[];
   error?: string;
 };
 
@@ -24,20 +26,12 @@ type AnswerResponse = {
   answer: string;
   model: string;
   usedAi: boolean;
-  sources: SearchResult[];
+  sources: ThreadResult[];
   error?: string;
 };
 
-const EXAMPLES = [
-  "Когда менять масло на Palisade?",
-  "Что владельцы пишут про тормозные диски?",
-  "Есть ли болячки у HTRAC?",
-  "Какой фильтр смотреть на дизеле?",
-  "Что с камерой и мультимедиа?",
-];
-
 const DAILY_AI_LIMIT = 5;
-const AI_STORAGE_KEY = "palisade-owners:ai-usage";
+const AI_STORAGE_KEY = "palisade-search:ai-usage";
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -61,9 +55,14 @@ function writeUsage(count: number) {
   localStorage.setItem(AI_STORAGE_KEY, JSON.stringify({ day: todayKey(), count }));
 }
 
+function fmtDate(iso: string) {
+  return iso?.slice(0, 10) ?? "";
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
   const [searchData, setSearchData] = useState<SearchResponse | null>(null);
   const [answerData, setAnswerData] = useState<AnswerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +89,7 @@ export default function Home() {
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q.trim(), limit: 5 }),
+        body: JSON.stringify({ query: q.trim(), limit: 20 }),
       });
       const json = (await res.json()) as SearchResponse;
       if (!res.ok) {
@@ -105,13 +104,13 @@ export default function Home() {
     }
   }
 
-  async function askAi(q: string) {
+  async function summarize(q: string) {
     if (!canAskAi) {
-      setError("Лимит демо-запросов на сегодня исчерпан. Попробуй завтра.");
+      setError("Лимит AI-суммаризаций на сегодня исчерпан. Попробуй завтра.");
       return;
     }
     if (q.trim().length < 2) return;
-    setSearching(true);
+    setSummarizing(true);
     setError(null);
     try {
       const res = await fetch("/api/answer", {
@@ -125,16 +124,20 @@ export default function Home() {
         return;
       }
       setAnswerData(json);
-      const nextCount = aiCount + 1;
-      setAiCount(nextCount);
-      writeUsage(nextCount);
       setSearchData({ query: q.trim(), results: json.sources, error: undefined });
+      if (json.usedAi) {
+        const nextCount = aiCount + 1;
+        setAiCount(nextCount);
+        writeUsage(nextCount);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setSearching(false);
+      setSummarizing(false);
     }
   }
+
+  const busy = searching || summarizing;
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 py-6 md:px-6 md:py-10">
@@ -142,24 +145,24 @@ export default function Home() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-blue-100">
-              🧠 Палисад-knowledge MVP
+              🔎 Поиск по сообществу Palisade
             </div>
             <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">
-              База знаний владельцев Palisade
+              Поиск по обсуждениям владельцев Palisade
             </h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-blue-100/90 md:text-base">
-              Публичный MVP для поиска по накопленным знаниям владельцев Hyundai Palisade.
-              Без сервисной книжки, без Telegram, без VPN. Можно показать людям как это
-              работает, а AI отвечает только по найденному контексту.
+              Один вопрос — и находим реальные обсуждения из Telegram-сообщества владельцев
+              Hyundai Palisade. Без Telegram, без VPN, без листания тысяч сообщений.
+              По желанию AI коротко суммирует найденное.
             </p>
           </div>
 
           <div className="grid gap-3 rounded-3xl bg-white/10 p-4 backdrop-blur md:min-w-72">
-            <div className="text-sm text-blue-100">Демо-лимит AI</div>
+            <div className="text-sm text-blue-100">AI-суммаризаций сегодня</div>
             <div className="text-3xl font-semibold">
               {aiCount}/{DAILY_AI_LIMIT}
             </div>
-            <div className="text-xs text-blue-100/80">запросов сегодня в этом браузере</div>
+            <div className="text-xs text-blue-100/80">в этом браузере. Поиск — без лимита</div>
           </div>
         </div>
       </section>
@@ -183,18 +186,18 @@ export default function Home() {
             <button
               type="button"
               onClick={() => runSearch(query)}
-              disabled={searching || query.trim().length < 2}
+              disabled={busy || query.trim().length < 2}
               className="flex-1 rounded-2xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-neuSm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {searching ? "Ищем..." : "Найти в базе"}
+              {searching ? "Ищем..." : "Найти обсуждения"}
             </button>
             <button
               type="button"
-              onClick={() => askAi(query)}
-              disabled={searching || query.trim().length < 2 || !canAskAi}
+              onClick={() => summarize(query)}
+              disabled={busy || query.trim().length < 2 || !canAskAi}
               className="flex-1 rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-neuSm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {searching ? "Думаю..." : canAskAi ? "Спросить AI" : "Лимит на сегодня"}
+              {summarizing ? "Суммирую..." : canAskAi ? "Суммировать находки (AI)" : "Лимит на сегодня"}
             </button>
           </div>
 
@@ -219,7 +222,7 @@ export default function Home() {
           {answerData && (
             <div className="mt-5 rounded-[1.5rem] bg-bg p-4 shadow-inset">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">AI-ответ</h2>
+                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">AI-сводка</h2>
                 <span className="text-[11px] text-muted">{answerData.model}</span>
               </div>
               <div className="space-y-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
@@ -232,13 +235,13 @@ export default function Home() {
         <aside className="rounded-[2rem] bg-soft p-5 shadow-neu md:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">Как это работает</h2>
           <div className="mt-4 space-y-3 text-sm leading-6 text-ink/90">
-            <p>1. Пользователь пишет вопрос по Palisade.</p>
-            <p>2. Система ищет в локальной базе знаний.</p>
-            <p>3. AI формирует краткий ответ только по найденным материалам.</p>
-            <p>4. Для демо можно показать это без Telegram и без личных данных.</p>
+            <p>1. Пишешь вопрос по Palisade обычными словами.</p>
+            <p>2. Ищем семантически + по словам в базе обсуждений сообщества.</p>
+            <p>3. Получаешь реальные треды: дата, активность, реакции.</p>
+            <p>4. По кнопке AI коротко суммирует, что пишут люди.</p>
           </div>
           <div className="mt-5 rounded-[1.5rem] bg-bg p-4 shadow-inset">
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Фокус MVP</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">Частые темы</div>
             <ul className="mt-3 space-y-2 text-sm text-ink/90">
               <li>• тормоза и расходники</li>
               <li>• масло и интервалы обслуживания</li>
@@ -248,15 +251,15 @@ export default function Home() {
             </ul>
           </div>
           <p className="mt-5 text-xs leading-5 text-muted">
-            Для продакшена можно позже подключить Supabase, загрузку реальных материалов и полноценный
-            индекс. Сейчас это безопасный стартовый MVP, который уже можно показывать людям.
+            Поиск идёт по архиву обсуждений владельцев. AI отвечает только по найденным
+            тредам и не выдумывает фактов.
           </p>
         </aside>
       </section>
 
       <section className="mt-5 rounded-[2rem] bg-soft p-5 shadow-neu md:p-7">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">Результаты</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">Обсуждения</h2>
           <div className="text-xs text-muted">
             {searchData?.results?.length ? `${searchData.results.length} найдено` : "пока пусто"}
           </div>
@@ -265,26 +268,14 @@ export default function Home() {
         <div className="mt-4 grid gap-3">
           {(searchData?.results ?? []).map((item) => (
             <article key={item.id} className="rounded-[1.5rem] bg-bg p-4 shadow-inset">
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted">
-                    {item.topic}
-                  </div>
-                  <h3 className="mt-1 text-lg font-semibold text-ink">{item.title}</h3>
-                </div>
-                <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-accent shadow-neuSm">
-                  score {item.score.toFixed(1)}
-                </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-medium uppercase tracking-[0.15em] text-muted">
+                <span>{fmtDate(item.start_date)}</span>
+                <span>💬 {item.message_count} сообщ.</span>
+                <span>👥 {item.participants_count}</span>
+                {item.reactions_total > 0 && <span>❤ {item.reactions_total}</span>}
+                {item.source_channel && <span className="normal-case tracking-normal">{item.source_channel}</span>}
               </div>
-              <p className="mt-3 text-sm leading-6 text-ink/90">{item.excerpt}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {item.tags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-white px-3 py-1 text-[11px] text-muted shadow-neuSm">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-muted">{item.source}</div>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink/90">{item.excerpt}</p>
             </article>
           ))}
           {(searchData?.results?.length ?? 0) === 0 && !error && (
