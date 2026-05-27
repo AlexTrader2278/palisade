@@ -17,7 +17,7 @@ function resolveProvider(): { provider: Provider; apiKey: string; baseUrl: strin
       provider,
       apiKey: openrouterKey,
       baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
-      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-chat",
+      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-r1",
     };
   }
 
@@ -40,26 +40,28 @@ export async function summarize(
 ): Promise<{ answer: string; model: string; usedAi: boolean }> {
   const config = resolveProvider();
 
-  // В LLM шлём только топ-10 тредов (контроль токенов под наплыв),
-  // даже если на странице показываем больше.
-  const top = threads.slice(0, 10);
+  // В LLM шлём до 20 тредов — нужна широта, чтобы поймать ПОВТОРЯЮЩИЕСЯ
+  // советы (частотность важнее для вопросов вроде "какие шины брать").
+  const top = threads.slice(0, 20);
   const context = top.length
     ? top
         .map((t, i) =>
           [
             `Обсуждение ${i + 1} (${fmtDate(t.start_date)}, сообщений: ${t.message_count}, реакций: ${t.reactions_total}):`,
-            t.text.slice(0, 1500),
+            t.text.slice(0, 2800),
           ].join("\n")
         )
         .join("\n\n---\n\n")
     : "Подходящих обсуждений в базе нет.";
 
   const system = [
-    "Ты помощник по базе обсуждений владельцев Hyundai Palisade из Telegram-сообщества.",
-    "Тебе дают реальные треды обсуждений. Не пересказывай их по очереди — СИНТЕЗИРУЙ общий вывод.",
-    "Структура ответа: 1) короткий вывод в 1-2 предложениях; 2) ключевые моменты списком (что советуют, какие есть мнения, на что жалуются); 3) если мнения расходятся — покажи это.",
-    "Отвечай по-русски, по делу, без воды. Опирайся ТОЛЬКО на переданные обсуждения.",
-    "Не выдумывай факты, цены, артикулы и регламенты, которых нет в тредах. Если данных мало — честно скажи.",
+    "Ты эксперт-консультант по Hyundai Palisade. Перед тобой реальные обсуждения владельцев из Telegram.",
+    "Дай КОНКРЕТНЫЙ ответ, как живой опытный владелец — без воды и общих фраз.",
+    "ГЛАВНОЕ ПРАВИЛО: считай частотность. Если конкретную марку/модель/деталь/решение советуют НЕСКОЛЬКО человек — это и есть главный совет сообщества, назови его ПЕРВЫМ и прямо («Большинство берёт X»).",
+    "Называй конкретику: марки, модели, артикулы, цифры, цены, интервалы — ровно как в тредах. НЕ обобщай («китайские шины», «разные масла») — перечисляй конкретные названия, которые звучат, и кто что хвалит/ругает.",
+    "Структура: 1) прямой ответ-вывод (что брать/делать) в 1-2 предложениях; 2) конкретика и альтернативы списком, с пометкой что популярнее; 3) на что жалуются / подводные камни.",
+    "НЕ ПУТАЙ КАТЕГОРИИ ТОВАРОВ. Отвечай строго на заданный вопрос. Моторное масло, AdBlue/мочевина (Niagara, Лукойл AdBlue и т.п.), антифриз/охлаждайка, трансмиссионное масло — это РАЗНЫЕ вещи. Если спросили про моторное масло — пиши только про моторное масло, не приплетай AdBlue, экологию, мочевину или другие жидкости.",
+    "Отвечай по-русски. Опирайся ТОЛЬКО на переданные обсуждения, ничего не выдумывай. Если данных реально мало — так и скажи, не лей воду.",
   ].join(" ");
 
   if (!config) {
@@ -88,8 +90,8 @@ export async function summarize(
         { role: "system", content: system },
         { role: "user", content: `Вопрос: ${question}\n\nОбсуждения из сообщества:\n${context}` },
       ],
-      temperature: 0.2,
-      max_tokens: 700,
+      temperature: 0.3,
+      max_tokens: 1200,
     }),
   });
 
@@ -99,8 +101,10 @@ export async function summarize(
   }
 
   const json = (await response.json()) as { choices?: { message?: { content?: string } }[] };
-  const answer = json.choices?.[0]?.message?.content?.trim();
+  let answer = json.choices?.[0]?.message?.content?.trim();
   if (!answer) throw new Error("AI response is empty");
+  // У рассуждающих моделей (R1) в content иногда просачивается блок <think>…</think> — срезаем.
+  answer = answer.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
   return { answer, model: config.model, usedAi: true };
 }

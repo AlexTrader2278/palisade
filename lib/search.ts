@@ -16,7 +16,7 @@ function terms(query: string): string[] {
     .filter((t) => t.length > 2 && !stopwords.has(t));
 }
 
-function excerpt(text: string, query: string, len = 320): string {
+function excerpt(text: string, query: string, len = 700): string {
   const lower = text.toLowerCase();
   const hit = terms(query).find((t) => lower.includes(t));
   if (!hit) return text.length > len ? `${text.slice(0, len)}…` : text;

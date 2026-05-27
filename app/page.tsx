@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type ThreadResult = {
   id: string;
@@ -225,8 +227,22 @@ export default function Home() {
                 <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">AI-сводка</h2>
                 <span className="text-[11px] text-muted">{answerData.model}</span>
               </div>
-              <div className="space-y-3 whitespace-pre-wrap text-[15px] leading-7 text-ink">
-                {answerData.answer}
+              <div className="space-y-2 text-[15px] leading-7 text-ink">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p className="mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul>,
+                    ol: ({ children }) => <ol className="mb-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                    li: ({ children }) => <li className="leading-6">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+                    h1: ({ children }) => <h3 className="mt-3 mb-1 text-base font-semibold text-ink">{children}</h3>,
+                    h2: ({ children }) => <h3 className="mt-3 mb-1 text-base font-semibold text-ink">{children}</h3>,
+                    h3: ({ children }) => <h3 className="mt-3 mb-1 text-base font-semibold text-ink">{children}</h3>,
+                  }}
+                >
+                  {answerData.answer}
+                </ReactMarkdown>
               </div>
             </div>
           )}
