@@ -17,7 +17,9 @@ function resolveProvider(): { provider: Provider; apiKey: string; baseUrl: strin
       provider,
       apiKey: openrouterKey,
       baseUrl: process.env.OPENROUTER_BASE_URL?.trim() || "https://openrouter.ai/api/v1",
-      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-r1",
+      // V3 (chat), а не R1: R1 рассуждает дольше 60с → таймаут функции Vercel.
+      // Качество тянем промптом + контекстом, а не медленной reasoning-моделью.
+      model: process.env.AI_MODEL?.trim() || "deepseek/deepseek-chat",
     };
   }
 
