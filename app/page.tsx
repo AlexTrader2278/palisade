@@ -170,7 +170,7 @@ export default function Home() {
       </section>
 
       <section className="mt-5 grid gap-5 md:grid-cols-[1.35fr_0.9fr]">
-        <div className="rounded-[2rem] bg-soft p-5 shadow-neu md:p-7">
+        <div className="min-w-0 rounded-[2rem] bg-soft p-5 shadow-neu md:p-7">
           <label className="block">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-muted">
               Что ищем
@@ -225,9 +225,9 @@ export default function Home() {
             <div className="mt-5 rounded-[1.5rem] bg-bg p-4 shadow-inset">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">AI-сводка</h2>
-                <span className="text-[11px] text-muted">{answerData.model}</span>
+                <span className="text-[11px] text-muted">по обсуждениям сообщества</span>
               </div>
-              <div className="space-y-2 break-words text-[15px] leading-7 text-ink">
+              <div className="space-y-2 break-words [overflow-wrap:anywhere] text-[15px] leading-7 text-ink">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -248,7 +248,7 @@ export default function Home() {
           )}
         </div>
 
-        <aside className="rounded-[2rem] bg-soft p-5 shadow-neu md:p-6">
+        <aside className="min-w-0 rounded-[2rem] bg-soft p-5 shadow-neu md:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">Как это работает</h2>
           <div className="mt-4 space-y-3 text-sm leading-6 text-ink/90">
             <p>1. Пишешь вопрос по Palisade обычными словами.</p>
@@ -291,7 +291,7 @@ export default function Home() {
                 {item.reactions_total > 0 && <span>❤ {item.reactions_total}</span>}
                 {item.source_channel && <span className="normal-case tracking-normal">{item.source_channel}</span>}
               </div>
-              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-ink/90">{item.excerpt}</p>
+              <p className="mt-3 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-6 text-ink/90">{item.excerpt}</p>
             </article>
           ))}
           {(searchData?.results?.length ?? 0) === 0 && !error && (

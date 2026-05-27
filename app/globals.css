@@ -5,6 +5,10 @@
 html,
 body {
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: break-word;
+  word-break: break-word;
   background:
     radial-gradient(circle at top left, rgba(44, 92, 255, 0.18), transparent 28%),
     radial-gradient(circle at top right, rgba(124, 58, 237, 0.12), transparent 26%),
