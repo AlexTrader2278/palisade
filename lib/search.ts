@@ -26,11 +26,28 @@ function excerpt(text: string, query: string, len = 700): string {
   return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
 }
 
+/**
+ * Обезличивание авторов (152-ФЗ): префиксы вида "[Имя Фамилия]:" заменяем
+ * на "[Участник N]" с нумерацией в пределах треда. Так сохраняется логика
+ * диалога, но из выдачи уходят персональные данные авторов сообщений.
+ */
+function maskAuthors(text: string): string {
+  const map = new Map<string, string>();
+  return text.replace(/\[([^\]\n]{1,40})\]:/g, (_m, name: string) => {
+    const key = name.trim();
+    if (!map.has(key)) map.set(key, `Участник ${map.size + 1}`);
+    return `[${map.get(key)}]:`;
+  });
+}
+
 export async function search(
   query: string,
   limit = 20,
   sourceChannel: string | null = null
 ): Promise<ThreadResult[]> {
   const threads = await searchThreads(query, limit, sourceChannel);
-  return threads.map((t) => ({ ...t, excerpt: excerpt(t.text, query) }));
+  return threads.map((t) => {
+    const text = maskAuthors(t.text);
+    return { ...t, text, excerpt: excerpt(text, query) };
+  });
 }
