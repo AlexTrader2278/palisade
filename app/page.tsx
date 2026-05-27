@@ -142,7 +142,7 @@ export default function Home() {
   const busy = searching || summarizing;
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 py-6 md:px-6 md:py-10">
+    <main className="mx-auto min-h-screen max-w-6xl overflow-x-hidden px-4 py-6 md:px-6 md:py-10">
       <section className="overflow-hidden rounded-[2rem] border border-white/60 bg-[linear-gradient(135deg,#132036_0%,#1f355d_58%,#2c5cff_100%)] px-5 py-6 text-white shadow-neu md:px-8 md:py-8">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
@@ -227,7 +227,7 @@ export default function Home() {
                 <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted">AI-сводка</h2>
                 <span className="text-[11px] text-muted">{answerData.model}</span>
               </div>
-              <div className="space-y-2 text-[15px] leading-7 text-ink">
+              <div className="space-y-2 break-words text-[15px] leading-7 text-ink">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -291,7 +291,7 @@ export default function Home() {
                 {item.reactions_total > 0 && <span>❤ {item.reactions_total}</span>}
                 {item.source_channel && <span className="normal-case tracking-normal">{item.source_channel}</span>}
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-ink/90">{item.excerpt}</p>
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-ink/90">{item.excerpt}</p>
             </article>
           ))}
           {(searchData?.results?.length ?? 0) === 0 && !error && (
